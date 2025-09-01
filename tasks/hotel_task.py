@@ -13,7 +13,7 @@ def run_hotel_recommendation(user_prompt: str, context: dict):
         "Recommend hotels/alternatives in destination within given budget and near attractions/neighborhoods. "
         "Main request: {user_prompt}. "
         "Additional context: {context}. "
-        "Output should be structured JSON-like and include grouped suggestions "
+        "Output should be paragrapgh structure and include grouped suggestions "
         "by budget (budget/mid/luxury), with name, brief notes, approximate price, "
         "and booking tips."
     )
@@ -21,7 +21,7 @@ def run_hotel_recommendation(user_prompt: str, context: dict):
     task = Task(
         description=description,
         agent=hotel_recommender,
-        expected_output="Structured JSON-like Hotel recommendations grouped by budget"
+        expected_output="A valid paragraph format with Hotel recommendations grouped by budget"
     )
 
     crew = Crew(

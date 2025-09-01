@@ -25,7 +25,7 @@ def run_budget_optimizer(user_prompt: str, context: dict):
         "Additional context: {context}. "
         "Use the provided context (transport_estimates, hotel_options, meal_estimate, activities) "
         "along with the user prompt to create a cost-optimized trip plan. "
-        "Return strictly structured JSON with the following keys:\n"
+        "Return strictly paragrapgh format with the following information:\n"
         "- total_estimate\n"
         "- per_day_breakdown (list of daily costs)\n"
         "- per_component_costs (transport, hotel, meals, activities)\n"
@@ -36,7 +36,7 @@ def run_budget_optimizer(user_prompt: str, context: dict):
     task = Task(
         description=description,
         agent=budget_optimizer,
-        expected_output="Valid JSON with trip budget optimization details"
+        expected_output="A valid paragraph format with trip budget optimization details"
     )
 
     crew = Crew(

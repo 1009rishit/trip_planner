@@ -6,10 +6,10 @@ def run_itinerary_builder(user_prompt: str, context: dict):
     """
     Runs the Itinerary Builder agent.
     Context should include aggregated outputs from: travel_research, weather, transport, hotels, budget.
-    The itinerary builder will create a day-by-day plan and return it as raw text (structured).
+    The itinerary builder will create a day-by-day plan and return it in paragraph format (not JSON).
     """
     description = f"""
-    You are creating a day-by-day itinerary.
+    You are creating a day-by-day travel itinerary.
 
     User Request:
     {user_prompt}
@@ -22,10 +22,32 @@ def run_itinerary_builder(user_prompt: str, context: dict):
     - Budget: {context.get("budget")}
 
     Instructions:
-    For each day include: Morning, Lunch, Afternoon, Evening, Dinner & Night, Daily Budget, Getting Around, Pro Tip.
+    Write the complete itinerary in a natural, narrative style.
+    Each day should be written in paragraph format, like a travel blog or guidebook.
+    Do NOT use JSON, bullet points, or lists.
+    Just write flowing text with transitions.
     """
-    task = Task(description=description, agent=itinerary_planner, expected_output="Detailed day-by-day itinerary not in the JSON but in the paragraph format")
-    crew = Crew(agents=[itinerary_planner], tasks=[task], verbose=False)
+
+    task = Task(
+        description=description,
+        agent=itinerary_planner,
+        expected_output="A detailed day-by-day itinerary written as natural language paragraphs only"
+    )
+
+    crew = Crew(
+        agents=[itinerary_planner],
+        tasks=[task],
+        verbose=False
+    )
+
     inputs = {"user_prompt": user_prompt, **context}
     result = crew.kickoff(inputs=inputs)
-    return {"raw": result, "structured": None}
+
+    if isinstance(result, dict):
+        # safely return "final_output" if present
+        return str(result.get("final_output", result))
+    elif hasattr(result, "final_output"):
+        return str(result.final_output)
+    else:
+        return str(result)
+

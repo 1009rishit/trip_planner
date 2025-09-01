@@ -13,14 +13,14 @@ def run_transport_advice(user_prompt: str, context: dict):
         "Consider user's travel_mode_preference and any constraints in context. "
         "Main request: {user_prompt}. "
         "Additional context: {context}. "
-        "Output should include: recommended_mode(s), estimated_times, costs_estimates, "
+        "Output should include: recommended_mode(s), estimated_times, costs_estimates, in paragrapgh format  "
         "route_notes, safety_advice, apps/tips, sources."
     )
 
     task = Task(
         description=description,
         agent=transport_advisor,
-        expected_output="Structured JSON-like transport advice"
+        expected_output="A valid paragraph format with transport advice"
     )
 
     crew = Crew(

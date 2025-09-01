@@ -2,7 +2,7 @@
 from crewai import Task, Crew
 from agents.travel_researcher import travel_researcher
 
-def run_travel_research(user_prompt: str, context: dict):
+def run_travel_research(user_prompt: str, context: str):
     """
     Runs the Travel Researcher agent.
     Args:
@@ -15,7 +15,7 @@ def run_travel_research(user_prompt: str, context: dict):
         "Research attractions and local tips for the given trip. "
         "Main request: {query}. "
         "Additional context: {context}. "
-        "Output should be structured JSON-like with keys: "
+        "output should be in the paragraph format  "
         "summary, top_attractions (list), hidden_gems (list), "
         "practical_tips (list), sources (list)."
     )
@@ -23,7 +23,7 @@ def run_travel_research(user_prompt: str, context: dict):
     task = Task(
         description=description,
         agent=travel_researcher,
-        expected_output="Structured JSON-like listing of attractions, hidden gems, tips and sources."
+        expected_output="A valid paragraph format with listing of attractions, hidden gems, tips and sources."
     )
     
     crew = Crew(
