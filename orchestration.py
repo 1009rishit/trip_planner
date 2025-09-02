@@ -11,12 +11,12 @@ from tasks.hotel_task import run_hotel_recommendation
 from tasks.budget_task import run_budget_optimizer
 from tasks.itinerary_task import run_itinerary_builder
 
-# ChromaDB memory
+# Redis memory
 from db.memory_store import add_memory, query_memory
 
 
 class ConversationalOrchestrator:
-    """Handles conversational flow with persistent memory in ChromaDB."""
+    """Handles conversational flow with persistent memory in Redis."""
 
     INTENT_PATTERNS = {
         "overview": [r"give me details", r"tell me about", r"overview", r"information about"],
@@ -42,7 +42,9 @@ class ConversationalOrchestrator:
         self.agent_outputs: Dict[str, Any] = {}
         self.conversation_history: list[Dict[str, str]] = []
 
-  
+    # -------------------
+    # Context Parsing
+    # -------------------
     def parse_user_prompt(self, user_prompt: str) -> Dict[str, Any]:
         ctx = self.context.copy()
         s = user_prompt.lower()
@@ -156,27 +158,42 @@ class ConversationalOrchestrator:
         return out
 
     def run_itinerary_agent(self, prompt: str):
-        # Fill context with outputs of previous agents, default to empty string if missing
-        ctx = {
-            "research": self.agent_outputs.get("travel_research", {}).get("raw", ""),
-            "weather": self.agent_outputs.get("weather_advice", {}).get("raw", ""),
-            "transport": self.agent_outputs.get("transport_advice", {}).get("raw", ""),
-            "hotels": self.agent_outputs.get("hotel_recommendation", {}).get("raw", ""),
-            "budget": self.agent_outputs.get("budget_optimizer", {}).get("raw", "")
+        """
+        Runs the itinerary agent.
+        If dependencies (research, weather, transport, hotels, budget) are missing,
+        it will automatically run those agents before building the itinerary.
+        """
+
+        # Required agents in dependency order
+        required_agents = {
+            "travel_research": self.run_travel_research,
+            "weather_advice": self.run_weather_advice,
+            "transport_advice": self.run_transport_advice,
+            "hotel_recommendation": self.run_hotel_recommendation,
+            "budget_optimizer": self.run_budget_optimizer,
         }
 
-        # Optional: remove keys that are empty if you want
-        # ctx = {k: v for k, v in ctx.items() if v}
+        # Check and run missing agents
+        for agent_key, agent_func in required_agents.items():
+            if agent_key not in self.agent_outputs or not self.agent_outputs[agent_key].get("raw"):
+                print(f"Running missing agent: {agent_key}")
+                self.agent_outputs[agent_key] = self.format_output(agent_func(prompt))
+
+        # Now collect context
+        ctx = {
+            "research": self.agent_outputs["travel_research"]["raw"],
+            "weather": self.agent_outputs["weather_advice"]["raw"],
+            "transport": self.agent_outputs["transport_advice"]["raw"],
+            "hotels": self.agent_outputs["hotel_recommendation"]["raw"],
+            "budget": self.agent_outputs["budget_optimizer"]["raw"],
+        }
 
         try:
-            # Call CrewAI task
             out = run_itinerary_builder(prompt, ctx)
-        except ValueError as e:
-            # Fallback if interpolation fails
+        except ValueError:
             print("CrewAI interpolation error, using fallback.")
             out = {"raw": "Sorry, could not generate full itinerary, but here's what I have."}
 
-        # Save output in agent_outputs
         self.agent_outputs["itinerary"] = self.format_output(out)
         return out
 
@@ -185,7 +202,7 @@ class ConversationalOrchestrator:
     # Orchestration
     # -------------------
     def process_user_input(self, user_input: str) -> Dict[str, Any]:
-        # Retrieve past memory
+        # Retrieve past memory from Redis
         memory_results = query_memory(user_input, top_k=3)
         past_context = ""
         if memory_results and memory_results.get("documents"):
@@ -214,7 +231,7 @@ class ConversationalOrchestrator:
         else:
             response = self.run_travel_research_agent(user_input + "\nContext:\n" + past_context)
 
-        # Store conversation memory
+        # Store conversation memory in Redis
         memory_metadata = {
             "user_id": self.user_id,
             "intent": intent,
@@ -222,7 +239,7 @@ class ConversationalOrchestrator:
         }
         doc_id = f"{self.user_id}_{datetime.now().timestamp()}"
         memory_text = f"Q: {user_input}\nA: {str(response)}"
-        add_memory(doc_id=doc_id, text=memory_text, metadata=memory_metadata)
+        add_memory(session_id=self.user_id,doc_id=doc_id, text=memory_text, metadata=memory_metadata)
 
         # Update local conversation history
         self.conversation_history.append({"user": user_input, "assistant": str(response)})

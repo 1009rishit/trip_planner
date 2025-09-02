@@ -1,40 +1,42 @@
-import chromadb
-from chromadb.config import Settings
-from db.embedding import MiniLMEmbedder
+# db/memory_store.py
+import redis
+import json
 
-# Initialize ChromaDB client with new API
-client = chromadb.PersistentClient(
-    settings=Settings(
-        persist_directory="./chroma_db"
-    )
-)
+# Connect to Redis
+r = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
 
-def get_memory_collection(name="trip_memory"):
-    existing_collections = [c.name for c in client.list_collections()]
-    if name in existing_collections:
-        return client.get_collection(name)
-    else:
-        return client.create_collection(name)
+def add_memory(session_id: str, doc_id: str, text: str, metadata: dict, ttl: int = 3600):
+    """Store memory for a specific session in Redis with TTL (auto-delete)."""
+    key = f"{session_id}:{doc_id}"
+    data = {
+        "text": text,
+        "metadata": metadata
+    }
+    r.setex(key, ttl, json.dumps(data))  # auto-delete after ttl
+    r.lpush(f"{session_id}:memories", key)
+    r.expire(f"{session_id}:memories", ttl)  # expire the list too
 
-# Add memory to ChromaDB
-def add_memory(doc_id: str, text: str, metadata: dict):
-    collection = get_memory_collection()
-    embedder = MiniLMEmbedder()
-    vector = embedder.embed_text(text)
-    collection.add(
-        ids=[doc_id],
-        documents=[text],
-        metadatas=[metadata],
-        embeddings=[vector]
-    )
 
-# Query memory
-def query_memory(query: str, top_k: int = 1):
-    collection = get_memory_collection()
-    embedder = MiniLMEmbedder()
-    query_vector = embedder.embed_text(query)
-    results = collection.query(
-        query_embeddings=[query_vector],
-        n_results=top_k
-    )
-    return results
+
+
+def query_memory(session_id: str, top_k: int = 3):
+    """Retrieve last `top_k` memories for a session."""
+    doc_ids = r.lrange(f"{session_id}:memories", 0, top_k - 1)
+    documents, metadatas = [], []
+
+    for doc_id in doc_ids:
+        raw = r.get(doc_id)
+        if raw:
+            data = json.loads(raw)
+            documents.append(data["text"])
+            metadatas.append(data["metadata"])
+
+    return {"documents": [documents], "metadatas": [metadatas]}
+
+def clear_session(session_id: str):
+    """Delete all memory for a session manually."""
+    doc_ids = r.lrange(f"{session_id}:memories", 0, -1)
+    for doc_id in doc_ids:
+        r.delete(doc_id)
+    r.delete(f"{session_id}:memories")
+
